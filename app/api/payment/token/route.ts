@@ -12,9 +12,16 @@ export async function POST(request: NextRequest) {
     const backendReturnUrl = process.env.NEXT_PUBLIC_2C2P_BACKEND_RETURN_URL
     const frontendReturnUrl = process.env.NEXT_PUBLIC_2C2P_FRONTEND_RETURN_URL
 
+    console.log('🔧 2C2P Configuration Check:')
+    console.log('- Merchant ID:', merchantID ? 'SET' : 'MISSING')
+    console.log('- Secret Code:', secretCode ? 'SET' : 'MISSING')
+    console.log('- Backend Return URL:', backendReturnUrl || 'MISSING')
+    console.log('- Frontend Return URL:', frontendReturnUrl || 'MISSING')
+    console.log('- Environment:', process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT || 'sandbox')
+
     if (!merchantID || !secretCode) {
       return NextResponse.json(
-        { error: 'Missing 2C2P configuration' },
+        { error: 'Missing 2C2P configuration - Merchant ID and Secret Code required' },
         { status: 500 }
       )
     }
@@ -26,7 +33,7 @@ export async function POST(request: NextRequest) {
       "description": description || "item 1",
       "amount": parseFloat(amount),
       "currencyCode": currencyCode,
-      "paymentChannel": ["CC"],
+      "paymentChannel": ["CC"], // Ensure correct format
       "request3DS": "",
       "tokenize": false,
       "cardTokens": [],
@@ -62,6 +69,21 @@ export async function POST(request: NextRequest) {
       "nonceStr": Math.random().toString(36).substring(2, 15),
       "uiParams": {},
       "iat": Math.floor(Date.now() / 1000)
+    }
+
+    // Validate payload before sending
+    console.log('🔍 Validating payment payload:')
+    console.log('- Merchant ID:', merchantID)
+    console.log('- Invoice No:', invoiceNo)
+    console.log('- Amount:', parseFloat(amount))
+    console.log('- Backend Return URL:', backendReturnUrl)
+    console.log('- Frontend Return URL:', frontendReturnUrl)
+    
+    // Check for production environment requirements
+    if (process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT === 'production') {
+      if (parseFloat(amount) < 10) {
+        console.warn('⚠️ Warning: Amount might be too low for production testing')
+      }
     }
 
     // Generate JWT token for 2C2P API
@@ -101,11 +123,34 @@ export async function POST(request: NextRequest) {
     // Decode JWT response from 2C2P
     let decodedResponse
     try {
+      // Check if response has payload (JWT)
+      if (!tokenResponse.payload) {
+        console.error('❌ 2C2P Error Response - No JWT payload:', tokenResponse)
+        return NextResponse.json(
+          { 
+            error: '2C2P API Error',
+            details: tokenResponse.respDesc || 'Unknown error',
+            respCode: tokenResponse.respCode,
+            fullResponse: tokenResponse
+          },
+          { status: 400 }
+        )
+      }
+
       decodedResponse = jwt.verify(tokenResponse.payload, secretCode, { algorithms: ['HS256'] })
-      console.log('Decoded 2C2P Response:', decodedResponse)
+      console.log('✅ Decoded 2C2P Response:', decodedResponse)
     } catch (error) {
-      console.error('Failed to decode 2C2P response:', error)
-      decodedResponse = tokenResponse // Fallback to raw response
+      console.error('❌ Failed to decode 2C2P response:', error)
+      console.error('Response received:', tokenResponse)
+      return NextResponse.json(
+        { 
+          error: 'Failed to decode 2C2P response',
+          details: error instanceof Error ? error.message : 'JWT decode error',
+          respCode: tokenResponse.respCode || 'JWT_ERROR',
+          fullResponse: tokenResponse
+        },
+        { status: 400 }
+      )
     }
 
     if (decodedResponse.respCode !== '0000') {

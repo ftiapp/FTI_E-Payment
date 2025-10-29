@@ -113,13 +113,15 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Step 2: Insert transaction
+        // Step 2: Insert transaction with unique transaction_reference
+        const transactionReference = `GS1-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
         const [transactionResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO \`GS1_transactions\` 
-           (invoice_number, customer_type, corporate_customer_id, personal_customer_id, 
+           (transaction_reference, invoice_number, customer_type, corporate_customer_id, personal_customer_id, 
             others_reference, service_or_product, total_amount, payment_status) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
           [
+            transactionReference,
             paymentData.invoice_number,
             paymentData.customer_type,
             paymentData.customer_type === 'corporate' ? customerId : null,
@@ -132,7 +134,7 @@ export async function POST(request: NextRequest) {
         transactionId = transactionResult.insertId
 
         await connection.commit()
-        console.log(`✅ GS1 Transaction created: ID=${transactionId}, Customer ID=${customerId}`)
+        console.log(`✅ GS1 Transaction created: ID=${transactionId}, Ref=${transactionReference}, Customer ID=${customerId}`)
         
       } catch (dbError) {
         await connection.rollback()
@@ -154,6 +156,7 @@ export async function POST(request: NextRequest) {
         success: true, 
         message: 'GS1 payment data saved successfully',
         transactionId: transactionId,
+        transactionReference: transactionReference,
         customerId: customerId,
         data: paymentData 
       },

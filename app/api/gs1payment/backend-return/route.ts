@@ -69,10 +69,11 @@ export async function POST(request: NextRequest) {
 
         // Update transaction status
         const paymentStatus = respCode === '0000' ? 'completed' : 'failed'
+        // Update ALL pending GS1 transactions for this invoice
         const [updateResult] = await connection.query<ResultSetHeader>(
           `UPDATE \`GS1_transactions\` 
            SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE invoice_number = ?`,
+           WHERE invoice_number = ? AND payment_status = 'pending'`,
           [paymentStatus, invoiceNo]
         )
 

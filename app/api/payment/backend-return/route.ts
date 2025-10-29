@@ -62,22 +62,26 @@ export async function POST(request: NextRequest) {
 
     // Update payment status in database
     try {
+      console.log(`🔄 Processing payment callback for invoice: ${invoiceNo}`)
       const connection = await pool.getConnection()
       
       try {
         await connection.beginTransaction()
 
-        // Update transaction status
+        // Update transaction status using invoice_number (can have multiple records)
         const paymentStatus = respCode === '0000' ? 'completed' : 'failed'
+        console.log(`📊 Updating payment status to: ${paymentStatus}`)
+        
+        // Update ALL pending transactions for this invoice
         const [updateResult] = await connection.query<ResultSetHeader>(
           `UPDATE \`FTI_E-Payment_transactions\` 
            SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE invoice_number = ?`,
+           WHERE invoice_number = ? AND payment_status = 'pending'`,
           [paymentStatus, invoiceNo]
         )
 
         if (updateResult.affectedRows === 0) {
-          console.error(`Transaction not found for invoice: ${invoiceNo}`)
+          console.error(`❌ Transaction not found for invoice: ${invoiceNo}`)
           await connection.rollback()
           connection.release()
           return NextResponse.json(
@@ -85,6 +89,8 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           )
         }
+
+        console.log(`✅ Transaction updated successfully for invoice: ${invoiceNo}`)
 
         // Get transaction ID
         const [rows]: any = await connection.query(

@@ -5,6 +5,20 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  // Production optimizations
+  experimental: {
+    serverComponentsExternalPackages: ['mysql2']
+  },
+  // Handle large responses and timeouts
+  async rewrites() {
+    return [];
+  },
+  // Increase timeout for production
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
 };
 
 export default nextConfig;

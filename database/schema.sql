@@ -48,7 +48,8 @@ CREATE TABLE `FTI_E-Payment_personal_customers` (
 -- Main Transaction Table
 CREATE TABLE `FTI_E-Payment_transactions` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `invoice_number` VARCHAR(50) NOT NULL UNIQUE,
+    `transaction_reference` VARCHAR(100) UNIQUE, -- Unique reference for each payment attempt
+    `invoice_number` VARCHAR(50) NOT NULL, -- Removed UNIQUE to allow multiple payments
     `customer_type` ENUM('corporate', 'personal') NOT NULL,
     `corporate_customer_id` INT NULL,
     `personal_customer_id` INT NULL,
@@ -63,7 +64,8 @@ CREATE TABLE `FTI_E-Payment_transactions` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (`corporate_customer_id`) REFERENCES `FTI_E-Payment_corporate_customers`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`personal_customer_id`) REFERENCES `FTI_E-Payment_personal_customers`(`id`) ON DELETE CASCADE,
-    INDEX `idx_invoice_number` (`invoice_number`),
+    INDEX `idx_transaction_reference` (`transaction_reference`),
+    INDEX `idx_invoice_number` (`invoice_number`), -- Regular index, not UNIQUE
     INDEX `idx_customer_type` (`customer_type`),
     INDEX `idx_payment_status` (`payment_status`),
     INDEX `idx_created_at` (`created_at`),
