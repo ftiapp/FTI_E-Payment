@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🔍 Payment inquiry for invoice: ${invoiceNo}`)
+    console.log(`🔍 Payment inquiry for invoice: "${invoiceNo}" (length: ${invoiceNo?.length})`)
 
     // Query payment status from database
     const connection = await pool.getConnection()
@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
         [`${invoiceNo}-%`, invoiceNo]
       )
 
-      console.log(`📋 Found ${transactions.length} transactions for inquiry pattern: ${invoiceNo}-%`)
+      console.log(`📋 Found ${transactions.length} transactions for inquiry patterns: "${invoiceNo}-%" OR "${invoiceNo}"`)
+      if (transactions.length > 0) {
+        console.log(`🔍 First transaction: ID=${transactions[0].id}, invoice="${transactions[0].invoice_number}", status=${transactions[0].payment_status}`)
+      }
 
       if (transactions.length === 0) {
         console.error(`❌ No transaction found for inquiry: ${invoiceNo}`)
