@@ -20,19 +20,19 @@ export async function POST(request: NextRequest) {
     const connection = await pool.getConnection()
     
     try {
-      // Get transaction details using LIKE pattern (2C2P sends original invoice)
+      // Get transaction details using exact match
       const [transactions] = await connection.query<RowDataPacket[]>(
         `SELECT t.*, pd.payment_reference as tranRef, pd.payment_date as transactionDateTime,
                 pd.gateway_response, pd.amount_paid as amount
          FROM \`FTI_E-Payment_transactions\` t
          LEFT JOIN \`FTI_E-Payment_payment_details\` pd ON t.id = pd.transaction_id
-         WHERE t.invoice_number LIKE ? OR t.invoice_number = ?
+         WHERE t.invoice_number = ?
          ORDER BY pd.created_at DESC
          LIMIT 1`,
-        [`${invoiceNo}-%`, invoiceNo]
+        [invoiceNo]
       )
 
-      console.log(`📋 Found ${transactions.length} transactions for inquiry patterns: "${invoiceNo}-%" OR "${invoiceNo}"`)
+      console.log(`📋 Found ${transactions.length} transactions for inquiry: "${invoiceNo}" (exact match)`)
       if (transactions.length > 0) {
         console.log(`🔍 First transaction: ID=${transactions[0].id}, invoice="${transactions[0].invoice_number}", status=${transactions[0].payment_status}`)
       }
@@ -44,11 +44,11 @@ export async function POST(request: NextRequest) {
         const [basicTransactions] = await connection.query<RowDataPacket[]>(
           `SELECT id, payment_status, created_at, updated_at
            FROM \`FTI_E-Payment_transactions\` 
-           WHERE invoice_number LIKE ? OR invoice_number = ?`,
-          [`${invoiceNo}-%`, invoiceNo]
+           WHERE invoice_number = ?`,
+          [invoiceNo]
         )
         
-        console.log(`🔍 Basic transaction check for pattern ${invoiceNo}-%: ${basicTransactions.length} found`)
+        console.log(`🔍 Basic transaction check for invoice ${invoiceNo}: ${basicTransactions.length} found`)
         
         return NextResponse.json(
           { 

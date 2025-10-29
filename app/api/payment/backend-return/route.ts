@@ -73,13 +73,13 @@ export async function POST(request: NextRequest) {
         console.log(`📊 Updating payment status to: ${paymentStatus}`)
         
         // First check if any transaction exists with this invoice number
-        // Try exact match first, then LIKE pattern for backward compatibility
+        // Use exact match only
         const [existingTransactions]: any = await connection.query(
-          `SELECT id, payment_status FROM \`FTI_E-Payment_transactions\` WHERE invoice_number = ? OR invoice_number LIKE ?`,
-          [invoiceNo, `${invoiceNo}-%`]
+          `SELECT id, payment_status FROM \`FTI_E-Payment_transactions\` WHERE invoice_number = ?`,
+          [invoiceNo]
         )
         
-        console.log(`📋 Found ${existingTransactions.length} transactions for invoice: "${invoiceNo}" (exact match or LIKE pattern)`)
+        console.log(`📋 Found ${existingTransactions.length} transactions for invoice: "${invoiceNo}" (exact match)`)
         
         if (existingTransactions.length === 0) {
           console.error(`❌ No transaction found for invoice: ${invoiceNo}`)
@@ -110,12 +110,12 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        // Update ALL pending transactions for this invoice pattern
+        // Update ALL pending transactions for this invoice
         const [updateResult] = await connection.query<ResultSetHeader>(
           `UPDATE \`FTI_E-Payment_transactions\` 
            SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE (invoice_number = ? OR invoice_number LIKE ?) AND payment_status = 'pending'`,
-          [paymentStatus, invoiceNo, `${invoiceNo}-%`]
+           WHERE invoice_number = ? AND payment_status = 'pending'`,
+          [paymentStatus, invoiceNo]
         )
 
         if (updateResult.affectedRows === 0) {
@@ -134,10 +134,10 @@ export async function POST(request: NextRequest) {
         // Get transaction ID for the most recently updated transaction
         const [rows]: any = await connection.query(
           `SELECT id FROM \`FTI_E-Payment_transactions\` 
-           WHERE invoice_number = ? OR invoice_number LIKE ? 
+           WHERE invoice_number = ? 
            ORDER BY updated_at DESC 
            LIMIT 1`,
-          [invoiceNo, `${invoiceNo}-%`]
+          [invoiceNo]
         )
         
         if (rows.length === 0) {
