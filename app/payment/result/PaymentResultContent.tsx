@@ -19,37 +19,86 @@ export default function PaymentResultContent() {
 
     const processPaymentResult = async () => {
       try {
+        // Get payment response from URL parameters
+        const invoiceNo = searchParams.get('invoiceNo')
+        const channelCode = searchParams.get('channelCode')
+        const respCode = searchParams.get('respCode')
+        const respDesc = searchParams.get('respDesc')
+
+        console.log('Processing payment result with params:', {
+          invoiceNo,
+          channelCode,
+          respCode,
+          respDesc
+        })
+
         // Call payment inquiry to get full payment details
         if (invoiceNo) {
-          const response = await fetch('/api/payment/inquiry', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ invoiceNo }),
-          })
+          try {
+            const response = await fetch('/api/payment/inquiry', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ invoiceNo }),
+            })
 
-          const result = await response.json()
+            console.log('Inquiry response status:', response.status)
 
-          if (result.success) {
-            setPaymentDetails(result.data)
+            if (!response.ok) {
+              const errorData = await response.json()
+              console.error('Inquiry API error:', errorData)
+              throw new Error(`Inquiry failed: ${errorData.error || 'Unknown error'}`)
+            }
+
+            const result = await response.json()
+            console.log('Inquiry result:', result)
+
+            if (result.success) {
+              setPaymentDetails(result.data)
+              
+              // Determine payment status based on response code
+              if (result.data.respCode === '0000') {
+                setPaymentStatus('success')
+              } else {
+                setPaymentStatus('failed')
+              }
+            } else {
+              console.error('Inquiry returned failure:', result)
+              
+              // Fallback to frontend response if inquiry fails
+              if (respCode === '2000') {
+                setPaymentStatus('pending') // Transaction completed, need inquiry
+              } else if (respCode === '1000' || respCode === '2001') {
+                setPaymentStatus('failed')
+              } else {
+                setPaymentStatus('failed')
+              }
+            }
+          } catch (apiError) {
+            console.error('API call failed:', apiError)
             
-            // Determine payment status based on response code
-            if (result.data.respCode === '0000') {
+            // Show error state but still try to determine status from URL params
+            if (respCode === '0000') {
               setPaymentStatus('success')
+            } else if (respCode === '2000') {
+              setPaymentStatus('pending')
             } else {
               setPaymentStatus('failed')
             }
-          } else {
-            // Fallback to frontend response if inquiry fails
-            if (respCode === '2000') {
-              setPaymentStatus('pending') // Transaction completed, need inquiry
-            } else if (respCode === '1000' || respCode === '2001') {
-              setPaymentStatus('failed')
-            } else {
-              setPaymentStatus('failed')
-            }
+            
+            // Show minimal details from URL params
+            setPaymentDetails({
+              invoiceNo,
+              respCode,
+              respDesc,
+              amount: searchParams.get('amount') || 'Unknown',
+              channelCode
+            })
           }
+        } else {
+          console.error('No invoice number found in URL parameters')
+          setPaymentStatus('failed')
         }
       } catch (error) {
         console.error('Error processing payment result:', error)

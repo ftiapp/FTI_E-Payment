@@ -69,28 +69,56 @@ export async function POST(request: NextRequest) {
 
         // Update transaction status
         const paymentStatus = respCode === '0000' ? 'completed' : 'failed'
-        // Update ALL pending GS1 transactions for this invoice
-        const [updateResult] = await connection.query<ResultSetHeader>(
-          `UPDATE \`GS1_transactions\` 
-           SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE invoice_number = ? AND payment_status = 'pending'`,
-          [paymentStatus, invoiceNo]
+        // First check if any GS1 transaction exists with this invoice number (using LIKE pattern)
+        // 2C2P sends original invoice (e.g., "1234567891"), we store unique (e.g., "1234567891-1234567890")
+        const [existingTransactions]: any = await connection.query(
+          `SELECT id, payment_status FROM \`GS1_transactions\` WHERE invoice_number LIKE ?`,
+          [`${invoiceNo}-%`]
         )
-
-        if (updateResult.affectedRows === 0) {
-          console.error(`GS1 Transaction not found for invoice: ${invoiceNo}`)
+        
+        console.log(`📋 Found ${existingTransactions.length} GS1 transactions for invoice pattern: ${invoiceNo}-%`)
+        
+        if (existingTransactions.length === 0) {
+          console.error(`❌ No GS1 transaction found for invoice: ${invoiceNo}`)
+          console.error('💡 This might indicate:')
+          console.error('   - GS1 Transaction creation failed before payment')
+          console.error('   - Invoice number format mismatch')
+          console.error('   - Database connection issue')
+          
           await connection.rollback()
           connection.release()
           return NextResponse.json(
-            { error: 'GS1 Transaction not found' },
+            { error: 'GS1 Transaction not found', invoiceNo, debug: 'No matching invoice in database' },
             { status: 404 }
           )
         }
 
+        // Update ALL pending GS1 transactions for this invoice pattern
+        const [updateResult] = await connection.query<ResultSetHeader>(
+          `UPDATE \`GS1_transactions\` 
+           SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
+           WHERE invoice_number LIKE ? AND payment_status = 'pending'`,
+          [paymentStatus, `${invoiceNo}-%`]
+        )
+
+        if (updateResult.affectedRows === 0) {
+          console.warn(`⚠️ No pending GS1 transactions to update for invoice: ${invoiceNo}`)
+          console.warn('Existing transactions:', existingTransactions)
+          
+          // Check if all transactions are already processed
+          const allProcessed = existingTransactions.every((t: any) => t.payment_status !== 'pending')
+          if (allProcessed) {
+            console.log(`ℹ️ All GS1 transactions for invoice ${invoiceNo} are already processed`)
+          }
+        }
+
         // Get transaction ID
         const [rows]: any = await connection.query(
-          'SELECT id FROM `GS1_transactions` WHERE invoice_number = ?',
-          [invoiceNo]
+          `SELECT id FROM \`GS1_transactions\` 
+           WHERE invoice_number LIKE ? 
+           ORDER BY updated_at DESC 
+           LIMIT 1`,
+          [`${invoiceNo}-%`]
         )
         const transactionId = rows[0]?.id
 

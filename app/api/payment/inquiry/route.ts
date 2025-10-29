@@ -7,48 +7,74 @@ export async function POST(request: NextRequest) {
     const { invoiceNo } = await request.json()
 
     if (!invoiceNo) {
+      console.error('❌ Inquiry API: Missing invoice number')
       return NextResponse.json(
         { error: 'Invoice number is required' },
         { status: 400 }
       )
     }
 
+    console.log(`🔍 Payment inquiry for invoice: ${invoiceNo}`)
+
     // Query payment status from database
     const connection = await pool.getConnection()
     
     try {
-      // Get transaction details
+      // Get transaction details using LIKE pattern (2C2P sends original invoice)
       const [transactions] = await connection.query<RowDataPacket[]>(
         `SELECT t.*, pd.payment_reference as tranRef, pd.payment_date as transactionDateTime,
                 pd.gateway_response, pd.amount_paid as amount
          FROM \`FTI_E-Payment_transactions\` t
          LEFT JOIN \`FTI_E-Payment_payment_details\` pd ON t.id = pd.transaction_id
-         WHERE t.invoice_number = ?
+         WHERE t.invoice_number LIKE ?
          ORDER BY pd.created_at DESC
          LIMIT 1`,
-        [invoiceNo]
+        [`${invoiceNo}-%`]
       )
 
+      console.log(`📋 Found ${transactions.length} transactions for inquiry pattern: ${invoiceNo}-%`)
+
       if (transactions.length === 0) {
+        console.error(`❌ No transaction found for inquiry: ${invoiceNo}`)
+        
+        // Check if transaction exists without payment details
+        const [basicTransactions] = await connection.query<RowDataPacket[]>(
+          `SELECT id, payment_status, created_at, updated_at
+           FROM \`FTI_E-Payment_transactions\` 
+           WHERE invoice_number LIKE ?`,
+          [`${invoiceNo}-%`]
+        )
+        
+        console.log(`🔍 Basic transaction check for pattern ${invoiceNo}-%: ${basicTransactions.length} found`)
+        
         return NextResponse.json(
           { 
             error: 'Transaction not found',
-            details: 'No transaction found for this invoice number' 
+            details: 'No transaction found for this invoice number',
+            invoiceNo,
+            debug: {
+              basicTransactionsFound: basicTransactions.length,
+              basicTransactions: basicTransactions
+            }
           },
           { status: 404 }
         )
       }
 
       const transaction = transactions[0]
+      console.log(`✅ Transaction found: ID=${transaction.id}, Status=${transaction.payment_status}`)
       
       // Parse gateway response if exists
       let gatewayData: any = {}
       if (transaction.gateway_response) {
         try {
           gatewayData = JSON.parse(transaction.gateway_response)
+          console.log(`📊 Gateway response parsed: ${Object.keys(gatewayData).join(', ')}`)
         } catch (e) {
           console.error('Failed to parse gateway response:', e)
         }
+      } else {
+        console.log('⚠️ No gateway response found')
       }
 
       // Format response similar to 2C2P format
@@ -67,6 +93,8 @@ export async function POST(request: NextRequest) {
         paymentStatus: transaction.payment_status
       }
 
+      console.log(`✅ Inquiry response prepared for ${invoiceNo}: ${inquiryResponse.respCode} - ${inquiryResponse.respDesc}`)
+
       return NextResponse.json({
         success: true,
         data: inquiryResponse
@@ -77,9 +105,13 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Payment inquiry error:', error)
+    console.error('❌ Payment inquiry error:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

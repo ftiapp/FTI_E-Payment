@@ -72,35 +72,90 @@ export async function POST(request: NextRequest) {
         const paymentStatus = respCode === '0000' ? 'completed' : 'failed'
         console.log(`📊 Updating payment status to: ${paymentStatus}`)
         
-        // Update ALL pending transactions for this invoice
-        const [updateResult] = await connection.query<ResultSetHeader>(
-          `UPDATE \`FTI_E-Payment_transactions\` 
-           SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE invoice_number = ? AND payment_status = 'pending'`,
-          [paymentStatus, invoiceNo]
+        // First check if any transaction exists with this invoice number (using LIKE pattern)
+        // 2C2P sends original invoice (e.g., "1234567891"), we store unique (e.g., "1234567891-1234567890")
+        const [existingTransactions]: any = await connection.query(
+          `SELECT id, payment_status FROM \`FTI_E-Payment_transactions\` WHERE invoice_number LIKE ?`,
+          [`${invoiceNo}-%`]
         )
-
-        if (updateResult.affectedRows === 0) {
-          console.error(`❌ Transaction not found for invoice: ${invoiceNo}`)
+        
+        console.log(`📋 Found ${existingTransactions.length} transactions for invoice pattern: ${invoiceNo}-%`)
+        
+        if (existingTransactions.length === 0) {
+          console.error(`❌ No transaction found for invoice: ${invoiceNo}`)
+          console.error('💡 This might indicate:')
+          console.error('   - Transaction creation failed before payment')
+          console.error('   - Invoice number format mismatch')
+          console.error('   - Database connection issue')
+          
+          // Create a log entry for debugging
+          await connection.query(
+            `INSERT INTO \`FTI_E-Payment_audit_log\` 
+             (transaction_id, action, old_values, new_values, user_id) 
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              null,
+              'callback_no_transaction',
+              JSON.stringify({ invoiceNo, respCode, respDesc }),
+              JSON.stringify({ paymentResponse }),
+              '2C2P_CALLBACK'
+            ]
+          )
+          
           await connection.rollback()
           connection.release()
           return NextResponse.json(
-            { error: 'Transaction not found' },
+            { error: 'Transaction not found', invoiceNo, debug: 'No matching invoice in database' },
             { status: 404 }
           )
         }
 
+        // Update ALL pending transactions for this invoice pattern
+        const [updateResult] = await connection.query<ResultSetHeader>(
+          `UPDATE \`FTI_E-Payment_transactions\` 
+           SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
+           WHERE invoice_number LIKE ? AND payment_status = 'pending'`,
+          [paymentStatus, `${invoiceNo}-%`]
+        )
+
+        if (updateResult.affectedRows === 0) {
+          console.warn(`⚠️ No pending transactions to update for invoice: ${invoiceNo}`)
+          console.warn('Existing transactions:', existingTransactions)
+          
+          // Check if all transactions are already processed
+          const allProcessed = existingTransactions.every((t: any) => t.payment_status !== 'pending')
+          if (allProcessed) {
+            console.log(`ℹ️ All transactions for invoice ${invoiceNo} are already processed`)
+          }
+        }
+
         console.log(`✅ Transaction updated successfully for invoice: ${invoiceNo}`)
 
-        // Get transaction ID
+        // Get transaction ID for the most recently updated transaction
         const [rows]: any = await connection.query(
-          'SELECT id FROM `FTI_E-Payment_transactions` WHERE invoice_number = ?',
-          [invoiceNo]
+          `SELECT id FROM \`FTI_E-Payment_transactions\` 
+           WHERE invoice_number LIKE ? 
+           ORDER BY updated_at DESC 
+           LIMIT 1`,
+          [`${invoiceNo}-%`]
         )
-        const transactionId = rows[0]?.id
+        
+        if (rows.length === 0) {
+          console.error(`❌ Could not retrieve transaction ID for invoice: ${invoiceNo}`)
+          await connection.rollback()
+          connection.release()
+          return NextResponse.json(
+            { error: 'Could not retrieve transaction ID' },
+            { status: 500 }
+          )
+        }
+        
+        const transactionId = rows[0].id
+        console.log(`📝 Retrieved transaction ID: ${transactionId} for invoice: ${invoiceNo}`)
 
         // Insert payment details
-        await connection.query(
+        console.log(`💾 Inserting payment details for transaction ID: ${transactionId}`)
+        const [paymentDetailsResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO \`FTI_E-Payment_payment_details\` 
            (transaction_id, payment_method, payment_reference, payment_date, 
             amount_paid, payment_status, gateway_response) 
@@ -124,6 +179,8 @@ export async function POST(request: NextRequest) {
             })
           ]
         )
+        
+        console.log(`✅ Payment details inserted: ID=${paymentDetailsResult.insertId}`)
 
         await connection.commit()
         console.log(`✅ Payment ${paymentStatus} for invoice ${invoiceNo}, Transaction ID: ${transactionId}`)
@@ -146,7 +203,21 @@ export async function POST(request: NextRequest) {
       // TODO: Send email confirmation here
     } else {
       console.log(`❌ Payment failed for invoice ${invoiceNo}: ${respDesc}`)
-      // TODO: Send failure notification
+      
+      // Handle specific fraud/test card scenarios
+      const fraudCodes = ['1001', '1002', '1003', '2001', '2002', '2003'] // Common fraud detection codes
+      const testCardCodes = ['9999', '9998', '9997'] // Test card codes
+      
+      if (fraudCodes.includes(respCode)) {
+        console.log(`🚨 FRAUD DETECTION - Invoice ${invoiceNo}, Code: ${respCode}`)
+        // TODO: Send fraud alert notification to admin
+        // TODO: Consider blacklisting the customer/IP
+      } else if (testCardCodes.includes(respCode)) {
+        console.log(`🧪 TEST CARD USED - Invoice ${invoiceNo}, Code: ${respCode}`)
+        // TODO: Log test card usage for monitoring
+      }
+      
+      // TODO: Send failure notification to customer
     }
 
     // Return success response to 2C2P

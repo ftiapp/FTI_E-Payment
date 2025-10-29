@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
   try {
     const { invoiceNo, amount, description } = await request.json()
 
-    // Generate unique invoice number if not provided or to avoid duplicates
-    const uniqueInvoiceNo = invoiceNo ? `${invoiceNo}-${Date.now()}` : `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    // Use original invoice number (no timestamp) to match database records
+    const finalInvoiceNo = invoiceNo || `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
     // 2C2P Configuration
     const merchantID = process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // Prepare payment token request payload
     const paymentPayload = {
       "merchantID": merchantID,
-      "invoiceNo": uniqueInvoiceNo,
+      "invoiceNo": finalInvoiceNo,
       "description": description || "item 1",
       "amount": parseFloat(amount),
       "currencyCode": currencyCode,
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     console.log('- Environment:', process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT)
     console.log('- Merchant ID:', merchantID)
     console.log('- Original Invoice No:', invoiceNo)
-    console.log('- Unique Invoice No:', uniqueInvoiceNo)
+    console.log('- Final Invoice No:', finalInvoiceNo)
     console.log('- Amount:', parseFloat(amount))
     console.log('- Backend Return URL:', backendReturnUrl)
     console.log('- Frontend Return URL:', frontendReturnUrl)

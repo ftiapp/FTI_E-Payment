@@ -173,10 +173,15 @@ export default function PaymentPage() {
     setIsLoading(true)
     
     try {
+      // Generate unique invoice number for internal use
+      const timestamp = Date.now()
+      const uniqueInvoiceNumber = `${formData.invoiceNumber}-${timestamp}`
+      
       // Prepare data for database insertion
       const paymentData = {
         customer_type: customerType,
-        invoice_number: formData.invoiceNumber,
+        invoice_number: uniqueInvoiceNumber, // Store unique invoice in DB
+        original_invoice_number: formData.invoiceNumber, // Keep original for 2C2P
         fti_member_id: formData.ftiMemberId || null,
         tax_id: formData.taxId || null,
         others_reference: formData.othersReference || null,
@@ -191,6 +196,11 @@ export default function PaymentPage() {
         created_at: new Date().toISOString()
       }
 
+      console.log('📝 Creating payment with unique invoice:', {
+        unique: uniqueInvoiceNumber,
+        original: formData.invoiceNumber
+      })
+
       // Insert into database
       const dbResponse = await fetch('/api/payments', {
         method: 'POST',
@@ -204,14 +214,14 @@ export default function PaymentPage() {
         throw new Error('Failed to save payment data')
       }
 
-      // Get 2C2P payment token
+      // Get 2C2P payment token using original invoice number
       const tokenResponse = await fetch('/api/payment/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          invoiceNo: formData.invoiceNumber,
+          invoiceNo: formData.invoiceNumber, // Send original invoice to 2C2P
           amount: parseFloat(formData.totalAmount),
           description: formData.serviceOrProduct
         }),
@@ -228,7 +238,21 @@ export default function PaymentPage() {
       
     } catch (error) {
       console.error('Payment processing error:', error)
-      alert('เกิดข้อผิดพลาดในการดำเนินการชำระเงิน กรุณาลองใหม่อีกครั้ง')
+      
+      // Handle specific error scenarios
+      let errorMessage = 'เกิดข้อผิดพลาดในการดำเนินการชำระเงิน กรุณาลองใหม่อีกครั้ง'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to save payment data')) {
+          errorMessage = 'ไม่สามารถบันทึกข้อมูลการชำระเงินได้ กรุณาติดต่อผู้ดูแลระบบ'
+        } else if (error.message.includes('Failed to get payment token')) {
+          errorMessage = 'ไม่สามารถเชื่อมต่อกับระบบชำระเงินได้ กรุณาลองใหม่อีกครั้ง'
+        } else if (error.message.includes('2C2P')) {
+          errorMessage = 'ระบบชำระเงินมีปัญหาชั่วคราว กรุณาลองใหม่ภายหลัง'
+        }
+      }
+      
+      alert(errorMessage)
     } finally {
       setIsLoading(false)
     }
