@@ -173,7 +173,7 @@ export default function PaymentPage() {
     setIsLoading(true)
     
     try {
-      // Generate unique invoice number for internal use
+      // Generate unique invoice number for both database and 2C2P
       const timestamp = Date.now()
       const uniqueInvoiceNumber = `${formData.invoiceNumber}-${timestamp}`
       
@@ -181,7 +181,7 @@ export default function PaymentPage() {
       const paymentData = {
         customer_type: customerType,
         invoice_number: uniqueInvoiceNumber, // Store unique invoice in DB
-        original_invoice_number: formData.invoiceNumber, // Keep original for 2C2P
+        original_invoice_number: formData.invoiceNumber, // Keep original for reference
         fti_member_id: formData.ftiMemberId || null,
         tax_id: formData.taxId || null,
         others_reference: formData.othersReference || null,
@@ -214,14 +214,14 @@ export default function PaymentPage() {
         throw new Error('Failed to save payment data')
       }
 
-      // Get 2C2P payment token using original invoice number
+      // Get 2C2P payment token using unique invoice number (with timestamp)
       const tokenResponse = await fetch('/api/payment/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          invoiceNo: formData.invoiceNumber, // Send original invoice to 2C2P
+          invoiceNo: uniqueInvoiceNumber, // Send unique invoice to 2C2P to match database
           amount: parseFloat(formData.totalAmount),
           description: formData.serviceOrProduct
         }),
