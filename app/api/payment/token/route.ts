@@ -1,9 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 
+// Helper function to provide troubleshooting information
+function getErrorCauses(respCode: string): string[] {
+  const causes: { [key: string]: string[] } = {
+    '9042': [
+      'Invalid request format',
+      'Missing required fields in payload',
+      'Invalid JWT token structure',
+      'Production environment using sandbox credentials'
+    ],
+    '9015': [
+      'Invoice number already exists in 2C2P system',
+      'Duplicate transaction attempt'
+    ],
+    '9001': [
+      'Invalid Merchant ID',
+      'Invalid Secret Code',
+      'Merchant not active'
+    ],
+    '4001': [
+      'JWT signature verification failed',
+      'Incorrect Secret Code used for signing'
+    ]
+  }
+  return causes[respCode] || ['Unknown error']
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { invoiceNo, amount, description } = await request.json()
+
+    // Generate unique invoice number if not provided or to avoid duplicates
+    const uniqueInvoiceNo = invoiceNo ? `${invoiceNo}-${Date.now()}` : `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
     // 2C2P Configuration
     const merchantID = process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
@@ -29,7 +58,7 @@ export async function POST(request: NextRequest) {
     // Prepare payment token request payload
     const paymentPayload = {
       "merchantID": merchantID,
-      "invoiceNo": invoiceNo,
+      "invoiceNo": uniqueInvoiceNo,
       "description": description || "item 1",
       "amount": parseFloat(amount),
       "currencyCode": currencyCode,
@@ -73,16 +102,44 @@ export async function POST(request: NextRequest) {
 
     // Validate payload before sending
     console.log('🔍 Validating payment payload:')
+    console.log('- Environment:', process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT)
     console.log('- Merchant ID:', merchantID)
-    console.log('- Invoice No:', invoiceNo)
+    console.log('- Original Invoice No:', invoiceNo)
+    console.log('- Unique Invoice No:', uniqueInvoiceNo)
     console.log('- Amount:', parseFloat(amount))
     console.log('- Backend Return URL:', backendReturnUrl)
     console.log('- Frontend Return URL:', frontendReturnUrl)
     
-    // Check for production environment requirements
+    // Production-specific validations
     if (process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT === 'production') {
+      console.log('🚀 PRODUCTION MODE - Additional validations:')
+      
+      if (!merchantID || merchantID === 'JT04') {
+        console.error('❌ Production requires valid Merchant ID (not sandbox JT04)')
+        return NextResponse.json(
+          { error: 'Invalid Production Merchant ID' },
+          { status: 500 }
+        )
+      }
+      
       if (parseFloat(amount) < 10) {
         console.warn('⚠️ Warning: Amount might be too low for production testing')
+      }
+      
+      if (!backendReturnUrl || !backendReturnUrl.includes('https://')) {
+        console.error('❌ Production requires HTTPS backend return URL')
+        return NextResponse.json(
+          { error: 'Production requires HTTPS backend return URL' },
+          { status: 500 }
+        )
+      }
+      
+      if (!frontendReturnUrl || !frontendReturnUrl.includes('https://')) {
+        console.error('❌ Production requires HTTPS frontend return URL')
+        return NextResponse.json(
+          { error: 'Production requires HTTPS frontend return URL' },
+          { status: 500 }
+        )
       }
     }
 
@@ -126,12 +183,26 @@ export async function POST(request: NextRequest) {
       // Check if response has payload (JWT)
       if (!tokenResponse.payload) {
         console.error('❌ 2C2P Error Response - No JWT payload:', tokenResponse)
+        
+        // Provide specific error handling for common error codes
+        const errorDetails = {
+          '9042': 'Invalid request format or missing required fields',
+          '9015': 'Invoice number already exists',
+          '9001': 'Invalid merchant ID or secret code',
+          '4001': 'Invalid signature'
+        }
+        
         return NextResponse.json(
           { 
             error: '2C2P API Error',
-            details: tokenResponse.respDesc || 'Unknown error',
+            details: tokenResponse.respDesc || errorDetails[tokenResponse.respCode as keyof typeof errorDetails] || 'Unknown error',
             respCode: tokenResponse.respCode,
-            fullResponse: tokenResponse
+            fullResponse: tokenResponse,
+            troubleshooting: {
+              environment: process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT,
+              merchantId: merchantID,
+              possibleCauses: getErrorCauses(tokenResponse.respCode as string)
+            }
           },
           { status: 400 }
         )
@@ -158,7 +229,7 @@ export async function POST(request: NextRequest) {
         { 
           error: 'Failed to decode 2C2P response',
           details: error instanceof Error ? error.message : 'JWT decode error',
-          respCode: tokenResponse.respCode || 'JWT_ERROR',
+          respCode: (tokenResponse.respCode as string) || 'JWT_ERROR',
           fullResponse: tokenResponse
         },
         { status: 400 }

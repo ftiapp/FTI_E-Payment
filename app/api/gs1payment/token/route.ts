@@ -5,6 +5,9 @@ export async function POST(request: NextRequest) {
   try {
     const { invoiceNo, amount, description } = await request.json()
 
+    // Generate unique invoice number if not provided or to avoid duplicates
+    const uniqueInvoiceNo = invoiceNo ? `GS1-${invoiceNo}-${Date.now()}` : `GS1-INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+
     // 2C2P Configuration
     const merchantID = process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
     const secretCode = process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
@@ -22,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Prepare payment token request payload
     const paymentPayload = {
       "merchantID": merchantID,
-      "invoiceNo": invoiceNo,
+      "invoiceNo": uniqueInvoiceNo,
       "description": description || "item 1",
       "amount": parseFloat(amount),
       "currencyCode": currencyCode,
