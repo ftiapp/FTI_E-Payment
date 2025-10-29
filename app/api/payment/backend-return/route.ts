@@ -72,14 +72,14 @@ export async function POST(request: NextRequest) {
         const paymentStatus = respCode === '0000' ? 'completed' : 'failed'
         console.log(`📊 Updating payment status to: ${paymentStatus}`)
         
-        // First check if any transaction exists with this invoice number (using LIKE pattern)
-        // 2C2P sends original invoice (e.g., "1234567891"), we store unique (e.g., "1234567891-1234567890")
+        // First check if any transaction exists with this invoice number
+        // Try exact match first, then LIKE pattern for backward compatibility
         const [existingTransactions]: any = await connection.query(
-          `SELECT id, payment_status FROM \`FTI_E-Payment_transactions\` WHERE invoice_number LIKE ?`,
-          [`${invoiceNo}-%`]
+          `SELECT id, payment_status FROM \`FTI_E-Payment_transactions\` WHERE invoice_number = ? OR invoice_number LIKE ?`,
+          [invoiceNo, `${invoiceNo}-%`]
         )
         
-        console.log(`📋 Found ${existingTransactions.length} transactions for invoice pattern: ${invoiceNo}-%`)
+        console.log(`📋 Found ${existingTransactions.length} transactions for invoice: "${invoiceNo}" (exact match or LIKE pattern)`)
         
         if (existingTransactions.length === 0) {
           console.error(`❌ No transaction found for invoice: ${invoiceNo}`)
@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
         const [updateResult] = await connection.query<ResultSetHeader>(
           `UPDATE \`FTI_E-Payment_transactions\` 
            SET payment_status = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE invoice_number LIKE ? AND payment_status = 'pending'`,
-          [paymentStatus, `${invoiceNo}-%`]
+           WHERE (invoice_number = ? OR invoice_number LIKE ?) AND payment_status = 'pending'`,
+          [paymentStatus, invoiceNo, `${invoiceNo}-%`]
         )
 
         if (updateResult.affectedRows === 0) {
@@ -134,10 +134,10 @@ export async function POST(request: NextRequest) {
         // Get transaction ID for the most recently updated transaction
         const [rows]: any = await connection.query(
           `SELECT id FROM \`FTI_E-Payment_transactions\` 
-           WHERE invoice_number LIKE ? 
+           WHERE invoice_number = ? OR invoice_number LIKE ? 
            ORDER BY updated_at DESC 
            LIMIT 1`,
-          [`${invoiceNo}-%`]
+          [invoiceNo, `${invoiceNo}-%`]
         )
         
         if (rows.length === 0) {
