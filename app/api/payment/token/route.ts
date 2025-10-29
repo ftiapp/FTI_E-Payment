@@ -139,6 +139,18 @@ export async function POST(request: NextRequest) {
 
       decodedResponse = jwt.verify(tokenResponse.payload, secretCode, { algorithms: ['HS256'] })
       console.log('✅ Decoded 2C2P Response:', decodedResponse)
+      
+      // Type guard to ensure decodedResponse is an object with respCode
+      if (typeof decodedResponse !== 'object' || decodedResponse === null || !('respCode' in decodedResponse)) {
+        console.error('❌ Invalid decoded response format:', decodedResponse)
+        return NextResponse.json(
+          { 
+            error: 'Invalid response format from 2C2P',
+            fullResponse: decodedResponse
+          },
+          { status: 400 }
+        )
+      }
     } catch (error) {
       console.error('❌ Failed to decode 2C2P response:', error)
       console.error('Response received:', tokenResponse)
@@ -153,12 +165,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (decodedResponse.respCode !== '0000') {
+    if ((decodedResponse as any).respCode !== '0000') {
       return NextResponse.json(
         { 
           error: 'Failed to get payment token',
-          details: decodedResponse.respDesc,
-          respCode: decodedResponse.respCode,
+          details: (decodedResponse as any).respDesc,
+          respCode: (decodedResponse as any).respCode,
           fullResponse: decodedResponse
         },
         { status: 400 }
@@ -167,10 +179,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      paymentToken: decodedResponse.paymentToken,
-      webPaymentUrl: decodedResponse.webPaymentUrl,
-      respCode: decodedResponse.respCode,
-      respDesc: decodedResponse.respDesc
+      paymentToken: (decodedResponse as any).paymentToken,
+      webPaymentUrl: (decodedResponse as any).webPaymentUrl,
+      fullResponse: decodedResponse
     })
 
   } catch (error) {

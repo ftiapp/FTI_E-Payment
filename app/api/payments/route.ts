@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     // Database insertion
     let customerId: number | null = null
     let transactionId: number | null = null
+    let transactionReference: string | null = null
 
     try {
       const connection = await pool.getConnection()
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 2: Insert transaction with unique transaction_reference
-        const transactionReference = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+        transactionReference = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
         const [transactionResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO \`FTI_E-Payment_transactions\` 
            (transaction_reference, invoice_number, customer_type, corporate_customer_id, personal_customer_id, 

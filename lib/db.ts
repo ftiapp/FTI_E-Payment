@@ -11,13 +11,10 @@ const pool = mysql.createPool({
   connectionLimit: 20, // Increased for production
   queueLimit: 0,
   timezone: '+07:00', // Thailand timezone
-  acquireTimeout: 60000, // 60 seconds
-  timeout: 60000, // 60 seconds
-  reconnect: true, // Auto reconnect
   // SSL configuration for production
   ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: false
-  } : false
+  } : undefined
 })
 
 // Test connection
