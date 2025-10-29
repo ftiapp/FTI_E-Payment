@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
                 pd.gateway_response, pd.amount_paid as amount
          FROM \`FTI_E-Payment_transactions\` t
          LEFT JOIN \`FTI_E-Payment_payment_details\` pd ON t.id = pd.transaction_id
-         WHERE t.invoice_number LIKE ?
+         WHERE t.invoice_number LIKE ? OR t.invoice_number = ?
          ORDER BY pd.created_at DESC
          LIMIT 1`,
-        [`${invoiceNo}-%`]
+        [`${invoiceNo}-%`, invoiceNo]
       )
 
       console.log(`📋 Found ${transactions.length} transactions for inquiry pattern: ${invoiceNo}-%`)
@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
         const [basicTransactions] = await connection.query<RowDataPacket[]>(
           `SELECT id, payment_status, created_at, updated_at
            FROM \`FTI_E-Payment_transactions\` 
-           WHERE invoice_number LIKE ?`,
-          [`${invoiceNo}-%`]
+           WHERE invoice_number LIKE ? OR invoice_number = ?`,
+          [`${invoiceNo}-%`, invoiceNo]
         )
         
         console.log(`🔍 Basic transaction check for pattern ${invoiceNo}-%: ${basicTransactions.length} found`)
