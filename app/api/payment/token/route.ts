@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // FTI 2C2P Configuration (Support both legacy and new patterns)
     const merchantID = process.env.FTI_2C2P_MERCHANT_ID || process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
-    const secretCode = process.env.FTI_2C2P_SECRET_KEY || process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
+    const secretCode = process.env.FTI_2C2P_SECRET_KEY
     const currencyCode = process.env.NEXT_PUBLIC_2C2P_CURRENCY_CODE || 'THB'
     const backendReturnUrl = process.env.NEXT_PUBLIC_2C2P_BACKEND_RETURN_URL
     const frontendReturnUrl = "https://ftie-payment-7vekz.kinsta.app/payment" // Override to redirect to /payment instead of /payment/result

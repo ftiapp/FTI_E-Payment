@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
           // Insert corporate customer
           const [corporateResult] = await connection.query<ResultSetHeader>(
             `INSERT INTO \`GS1_corporate_customers\` 
-             (company_name, tax_id, gs1_member_id, phone, email, address, first_name, last_name) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             (company_name, tax_id, gs1_member_id, phone, email, address, first_name, last_name, contact_person_name) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE 
              company_name = VALUES(company_name),
              gs1_member_id = VALUES(gs1_member_id),
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
              address = VALUES(address),
              first_name = VALUES(first_name),
              last_name = VALUES(last_name),
+             contact_person_name = VALUES(contact_person_name),
              updated_at = CURRENT_TIMESTAMP`,
             [
               paymentData.company_name,
@@ -65,7 +66,8 @@ export async function POST(request: NextRequest) {
               paymentData.email,
               paymentData.address,
               paymentData.first_name,
-              paymentData.last_name
+              paymentData.last_name,
+              paymentData.contact_person_name
             ]
           )
           customerId = corporateResult.insertId

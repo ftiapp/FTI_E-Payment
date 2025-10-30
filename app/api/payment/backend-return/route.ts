@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Decode JWT response
-    const secretCode = process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
+    const secretCode = process.env.FTI_2C2P_SECRET_KEY
     if (!secretCode) {
       return NextResponse.json(
         { error: 'Missing secret code configuration' },

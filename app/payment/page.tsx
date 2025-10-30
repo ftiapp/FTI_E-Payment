@@ -21,6 +21,7 @@ interface FormData {
   // Section 3: Contact & Payment Information
   contactFirstName: string  // For personal customers - separate from section 2
   contactLastName: string   // For personal customers - separate from section 2
+  contactPersonName: string // For corporate customers - contact person name
   phone: string
   email: string
   address: string
@@ -58,7 +59,7 @@ const translations = {
     phone: 'เบอร์โทรศัพท์ / Phone',
     email: 'อีเมล / Email',
     serviceOrProduct: 'รายละเอียดที่ต้องการชำระ (ไม่บังคับระบุ) / Payment Details (Optional)',
-    totalAmount: 'จำนวนเงินที่ต้องชำระ (บาท) / Total Amount (THB)',
+    totalAmount: 'จำนวนเงินที่ต้องชำระ (บาท) / Total Amount (THB) * (ยอดรวม Vat 7 %)',
     
     // Buttons & Messages
     submit: 'ดำเนินการชำระเงิน',
@@ -95,7 +96,7 @@ const translations = {
     phone: 'Phone / เบอร์โทรศัพท์',
     email: 'Email / อีเมล',
     serviceOrProduct: 'Payment Details (Optional) / รายละเอียดที่ต้องการชำระ (ไม่บังคับระบุ)',
-    totalAmount: 'Total Amount (THB) / จำนวนเงินที่ต้องชำระ (บาท)',
+    totalAmount: 'Total Amount (THB) / จำนวนเงินที่ต้องชำระ (บาท) * (Including 7% Vat)',
     
     // Buttons & Messages
     submit: 'Proceed to Payment',
@@ -118,6 +119,7 @@ export default function PaymentPage() {
     lastName: '',
     contactFirstName: '',
     contactLastName: '',
+    contactPersonName: '',
     phone: '',
     email: '',
     address: '',
@@ -322,8 +324,8 @@ export default function PaymentPage() {
           // User Defined fields mapping
           userDefined1: `${formData.invoiceNumber}-${timestamp}`, // Invoice-Tax ID
           userDefined2: customerType === 'corporate' 
-            ? formData.companyName 
-            : `${formData.firstName} ${formData.lastName}`, // Name
+            ? formData.contactPersonName || `${formData.firstName} ${formData.lastName}`
+            : `${formData.firstName} ${formData.lastName}`, // Contact Person Name
           userDefined3: formData.phone || '', // Phone
           userDefined4: formData.email || '', // Email
           userDefined5: customerType === 'corporate' ? 'corporate' : 'personal' // Customer type
@@ -742,7 +744,14 @@ export default function PaymentPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.totalAmount} <span className="text-red-500">*</span>
+                  <div className="flex flex-col space-y-1">
+                    <span>
+                      จำนวนเงินที่ต้องชำระ (บาท) / Total Amount (THB) <span className="text-red-500">*</span>
+                    </span>
+                    <span className="text-xs text-gray-500 font-normal">
+                      * (ยอดรวม Vat 7% / Including 7% Vat)
+                    </span>
+                  </div>
                 </label>
                 <input
                   type="number"

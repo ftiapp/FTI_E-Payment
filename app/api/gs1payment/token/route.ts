@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     // GS1 2C2P Configuration (Support both legacy and new patterns)
     // Priority: GS1_2C2P_* > NEXT_PUBLIC_2C2P_* (fallback to shared)
     const merchantID = process.env.GS1_2C2P_MERCHANT_ID || process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
-    const secretCode = process.env.GS1_2C2P_SECRET_KEY || process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
+    const secretCode = process.env.GS1_2C2P_SECRET_KEY
     const currencyCode = process.env.NEXT_PUBLIC_2C2P_CURRENCY_CODE || 'THB'
     const backendReturnUrl = process.env.NEXT_PUBLIC_2C2P_BACKEND_RETURN_URL
     const frontendReturnUrl = "https://ftie-payment-7vekz.kinsta.app/gs1payment" // Override to redirect to /gs1payment instead of /gs1payment/result
