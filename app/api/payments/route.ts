@@ -6,8 +6,8 @@ export async function POST(request: NextRequest) {
   try {
     const paymentData = await request.json()
 
-    // Validate required fields
-    const requiredFields = ['invoice_number', 'address', 'service_or_product', 'total_amount']
+    // Validate required fields (removed address, made service_or_product optional)
+    const requiredFields = ['invoice_number', 'total_amount']
     for (const field of requiredFields) {
       if (!paymentData[field]) {
         return NextResponse.json(
@@ -46,14 +46,16 @@ export async function POST(request: NextRequest) {
           // Insert corporate customer
           const [corporateResult] = await connection.query<ResultSetHeader>(
             `INSERT INTO \`FTI_E-Payment_corporate_customers\` 
-             (company_name, tax_id, fti_member_id, phone, email, address) 
-             VALUES (?, ?, ?, ?, ?, ?)
+             (company_name, tax_id, fti_member_id, phone, email, address, first_name, last_name) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE 
              company_name = VALUES(company_name),
              fti_member_id = VALUES(fti_member_id),
              phone = VALUES(phone),
              email = VALUES(email),
              address = VALUES(address),
+             first_name = VALUES(first_name),
+             last_name = VALUES(last_name),
              updated_at = CURRENT_TIMESTAMP`,
             [
               paymentData.company_name,
@@ -61,7 +63,9 @@ export async function POST(request: NextRequest) {
               paymentData.fti_member_id,
               paymentData.phone,
               paymentData.email,
-              paymentData.address
+              paymentData.address,
+              paymentData.first_name,
+              paymentData.last_name
             ]
           )
           customerId = corporateResult.insertId
@@ -80,8 +84,8 @@ export async function POST(request: NextRequest) {
           // Insert personal customer
           const [personalResult] = await connection.query<ResultSetHeader>(
             `INSERT INTO \`FTI_E-Payment_personal_customers\` 
-             (first_name, last_name, tax_id, fti_member_id, phone, email, address) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+             (first_name, last_name, tax_id, fti_member_id, phone, email, address, contact_first_name, contact_last_name) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE 
              first_name = VALUES(first_name),
              last_name = VALUES(last_name),
@@ -89,6 +93,8 @@ export async function POST(request: NextRequest) {
              phone = VALUES(phone),
              email = VALUES(email),
              address = VALUES(address),
+             contact_first_name = VALUES(contact_first_name),
+             contact_last_name = VALUES(contact_last_name),
              updated_at = CURRENT_TIMESTAMP`,
             [
               paymentData.first_name,
@@ -97,7 +103,9 @@ export async function POST(request: NextRequest) {
               paymentData.fti_member_id,
               paymentData.phone,
               paymentData.email,
-              paymentData.address
+              paymentData.address,
+              paymentData.contact_first_name,
+              paymentData.contact_last_name
             ]
           )
           customerId = personalResult.insertId
@@ -115,15 +123,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 2: Insert transaction with unique transaction_reference
-        transactionReference = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+        transactionReference = `FTI-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
         const [transactionResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO \`FTI_E-Payment_transactions\` 
-           (transaction_reference, invoice_number, customer_type, corporate_customer_id, personal_customer_id, 
+           (transaction_reference, invoice_number, original_invoice_number, customer_type, corporate_customer_id, personal_customer_id, 
             others_reference, service_or_product, total_amount, payment_status) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
           [
             transactionReference,
             paymentData.invoice_number,
+            paymentData.original_invoice_number,
             paymentData.customer_type,
             paymentData.customer_type === 'corporate' ? customerId : null,
             paymentData.customer_type === 'personal' ? customerId : null,

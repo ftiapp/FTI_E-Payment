@@ -3,21 +3,31 @@ import jwt from 'jsonwebtoken'
 
 export async function POST(request: NextRequest) {
   try {
-    const { invoiceNo, amount, description } = await request.json()
+    const { invoiceNo, amount, description, userDefined1, userDefined2, userDefined3, userDefined4, userDefined5 } = await request.json()
 
-    // Generate unique invoice number if not provided or to avoid duplicates
-    const uniqueInvoiceNo = invoiceNo ? `GS1-${invoiceNo}-${Date.now()}` : `GS1-INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    // Use the invoice number as provided (already has timestamp from form)
+    const finalInvoiceNo = invoiceNo || `GS1-INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
-    // 2C2P Configuration
-    const merchantID = process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
-    const secretCode = process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
+    // GS1 2C2P Configuration (Support both legacy and new patterns)
+    // Priority: GS1_2C2P_* > NEXT_PUBLIC_2C2P_* (fallback to shared)
+    const merchantID = process.env.GS1_2C2P_MERCHANT_ID || process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
+    const secretCode = process.env.GS1_2C2P_SECRET_KEY || process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
     const currencyCode = process.env.NEXT_PUBLIC_2C2P_CURRENCY_CODE || 'THB'
     const backendReturnUrl = process.env.NEXT_PUBLIC_2C2P_BACKEND_RETURN_URL
-    const frontendReturnUrl = process.env.NEXT_PUBLIC_2C2P_FRONTEND_RETURN_URL
+    const frontendReturnUrl = "https://ftie-payment-7vekz.kinsta.app/gs1payment" // Override to redirect to /gs1payment instead of /gs1payment/result
+
+    console.log('🔧 GS1 2C2P Configuration Check:')
+    console.log('- Merchant ID:', merchantID ? 'SET' : 'MISSING')
+    console.log('- Secret Code:', secretCode ? 'SET' : 'MISSING')
+    console.log('- Using GS1_2C2P_* env vars:', !!process.env.GS1_2C2P_MERCHANT_ID)
+    console.log('- Using NEXT_PUBLIC_2C2P_* env vars (fallback):', !!process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID)
+    console.log('- Backend Return URL:', backendReturnUrl || 'MISSING')
+    console.log('- Frontend Return URL:', frontendReturnUrl || 'MISSING')
+    console.log('- Environment:', process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT || 'sandbox')
 
     if (!merchantID || !secretCode) {
       return NextResponse.json(
-        { error: 'Missing 2C2P configuration' },
+        { error: 'Missing GS1 2C2P configuration - Set either GS1_2C2P_* or NEXT_PUBLIC_2C2P_* environment variables' },
         { status: 500 }
       )
     }
@@ -25,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Prepare payment token request payload
     const paymentPayload = {
       "merchantID": merchantID,
-      "invoiceNo": uniqueInvoiceNo,
+      "invoiceNo": finalInvoiceNo,
       "description": description || "item 1",
       "amount": parseFloat(amount),
       "currencyCode": currencyCode,
@@ -52,11 +62,11 @@ export async function POST(request: NextRequest) {
       "paymentRouteID": "",
       "fxProviderCode": "",
       "immediatePayment": false,
-      "userDefined1": "",
-      "userDefined2": "",
-      "userDefined3": "",
-      "userDefined4": "",
-      "userDefined5": "",
+      "userDefined1": userDefined1 || "",
+      "userDefined2": userDefined2 || "",
+      "userDefined3": userDefined3 || "",
+      "userDefined4": userDefined4 || "",
+      "userDefined5": userDefined5 || "",
       "statementDescriptor": "",
       "subMerchants": [],
       "locale": "en",

@@ -29,28 +29,30 @@ function getErrorCauses(respCode: string): string[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { invoiceNo, amount, description } = await request.json()
+    const { invoiceNo, amount, description, userDefined1, userDefined2, userDefined3, userDefined4, userDefined5 } = await request.json()
 
     // Use original invoice number (no timestamp) to match database records
     const finalInvoiceNo = invoiceNo || `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
-    // 2C2P Configuration
-    const merchantID = process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
-    const secretCode = process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
+    // FTI 2C2P Configuration (Support both legacy and new patterns)
+    const merchantID = process.env.FTI_2C2P_MERCHANT_ID || process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID
+    const secretCode = process.env.FTI_2C2P_SECRET_KEY || process.env.NEXT_PUBLIC_2C2P_SECRET_CODE
     const currencyCode = process.env.NEXT_PUBLIC_2C2P_CURRENCY_CODE || 'THB'
     const backendReturnUrl = process.env.NEXT_PUBLIC_2C2P_BACKEND_RETURN_URL
-    const frontendReturnUrl = process.env.NEXT_PUBLIC_2C2P_FRONTEND_RETURN_URL
+    const frontendReturnUrl = "https://ftie-payment-7vekz.kinsta.app/payment" // Override to redirect to /payment instead of /payment/result
 
-    console.log('🔧 2C2P Configuration Check:')
+    console.log('🔧 FTI 2C2P Configuration Check:')
     console.log('- Merchant ID:', merchantID ? 'SET' : 'MISSING')
     console.log('- Secret Code:', secretCode ? 'SET' : 'MISSING')
+    console.log('- Using FTI_2C2P_* env vars:', !!process.env.FTI_2C2P_MERCHANT_ID)
+    console.log('- Using NEXT_PUBLIC_2C2P_* env vars (legacy):', !!process.env.NEXT_PUBLIC_2C2P_MERCHANT_ID)
     console.log('- Backend Return URL:', backendReturnUrl || 'MISSING')
     console.log('- Frontend Return URL:', frontendReturnUrl || 'MISSING')
     console.log('- Environment:', process.env.NEXT_PUBLIC_2C2P_ENVIRONMENT || 'sandbox')
 
     if (!merchantID || !secretCode) {
       return NextResponse.json(
-        { error: 'Missing 2C2P configuration - Merchant ID and Secret Code required' },
+        { error: 'Missing FTI 2C2P configuration - Set either FTI_2C2P_* or NEXT_PUBLIC_2C2P_* environment variables' },
         { status: 500 }
       )
     }
@@ -85,11 +87,11 @@ export async function POST(request: NextRequest) {
       "paymentRouteID": "",
       "fxProviderCode": "",
       "immediatePayment": false,
-      "userDefined1": "",
-      "userDefined2": "",
-      "userDefined3": "",
-      "userDefined4": "",
-      "userDefined5": "",
+      "userDefined1": userDefined1 || "",
+      "userDefined2": userDefined2 || "",
+      "userDefined3": userDefined3 || "",
+      "userDefined4": userDefined4 || "",
+      "userDefined5": userDefined5 || "",
       "statementDescriptor": "",
       "subMerchants": [],
       "locale": "en",

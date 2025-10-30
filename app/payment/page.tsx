@@ -19,6 +19,8 @@ interface FormData {
   lastName: string
   
   // Section 3: Contact & Payment Information
+  contactFirstName: string  // For personal customers - separate from section 2
+  contactLastName: string   // For personal customers - separate from section 2
   phone: string
   email: string
   address: string
@@ -55,8 +57,7 @@ const translations = {
     // Section 3 Fields
     phone: 'เบอร์โทรศัพท์ / Phone',
     email: 'อีเมล / Email',
-    address: 'ที่อยู่ / Address',
-    serviceOrProduct: 'บริการหรือสินค้า / Service or Product',
+    serviceOrProduct: 'รายละเอียดที่ต้องการชำระ (ไม่บังคับระบุ) / Payment Details (Optional)',
     totalAmount: 'จำนวนเงินที่ต้องชำระ (บาท) / Total Amount (THB)',
     
     // Buttons & Messages
@@ -93,8 +94,7 @@ const translations = {
     // Section 3 Fields
     phone: 'Phone / เบอร์โทรศัพท์',
     email: 'Email / อีเมล',
-    address: 'Address / ที่อยู่',
-    serviceOrProduct: 'Service or Product / บริการหรือสินค้า',
+    serviceOrProduct: 'Payment Details (Optional) / รายละเอียดที่ต้องการชำระ (ไม่บังคับระบุ)',
     totalAmount: 'Total Amount (THB) / จำนวนเงินที่ต้องชำระ (บาท)',
     
     // Buttons & Messages
@@ -116,6 +116,8 @@ export default function PaymentPage() {
     companyName: '',
     firstName: '',
     lastName: '',
+    contactFirstName: '',
+    contactLastName: '',
     phone: '',
     email: '',
     address: '',
@@ -124,6 +126,8 @@ export default function PaymentPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
+  const [isSearchingMember, setIsSearchingMember] = useState(false)
+  const [memberSearchError, setMemberSearchError] = useState('')
 
   const t = translations[language]
 
@@ -132,6 +136,81 @@ export default function PaymentPage() {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
     }
+
+    // Auto-populate contact names for personal customers when section 2 names change
+    if (customerType === 'personal') {
+      if (field === 'firstName' && !formData.contactFirstName) {
+        setFormData(prev => ({ ...prev, contactFirstName: value }))
+      }
+      if (field === 'lastName' && !formData.contactLastName) {
+        setFormData(prev => ({ ...prev, contactLastName: value }))
+      }
+    }
+  }
+
+  const handleCustomerTypeChange = (type: CustomerType) => {
+    setCustomerType(type)
+    // Clear all form values when switching customer types
+    setFormData(prev => ({
+      ...prev,
+      companyName: '',
+      firstName: '',
+      lastName: '',
+      contactFirstName: '',
+      contactLastName: ''
+    }))
+    // Clear related errors
+    setErrors(prev => ({
+      ...prev,
+      companyName: '',
+      firstName: '',
+      lastName: '',
+      contactFirstName: '',
+      contactLastName: ''
+    }))
+    // Clear member search error
+    setMemberSearchError('')
+  }
+
+  const searchFtiMember = async (query: string, searchBy: 'memberCode' | 'taxId') => {
+    if (!query.trim()) {
+      setMemberSearchError('Please enter Member Code or Tax ID')
+      return
+    }
+
+    setIsSearchingMember(true)
+    setMemberSearchError('')
+
+    try {
+      const response = await fetch('/api/fti-members', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: query.trim(), searchBy }),
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Auto-fill form with member data
+        setFormData(prev => ({
+          ...prev,
+          ftiMemberId: result.data.memberCode,
+          taxId: result.data.taxId,
+          companyName: result.data.companyName
+        }))
+        setMemberSearchError('')
+        console.log('✅ Member data auto-filled:', result.data)
+      } else {
+        setMemberSearchError(result.message || 'Member not found')
+      }
+    } catch (error) {
+      console.error('Error searching FTI member:', error)
+      setMemberSearchError('Failed to search member. Please try again.')
+    } finally {
+      setIsSearchingMember(false)
+    }
   }
 
   const validateForm = () => {
@@ -139,6 +218,8 @@ export default function PaymentPage() {
 
     // Section 1 - Required
     if (!formData.invoiceNumber.trim()) newErrors.invoiceNumber = t.required
+    if (!formData.ftiMemberId.trim()) newErrors.ftiMemberId = t.required
+    if (!formData.taxId.trim()) newErrors.taxId = t.required
     
     // Section 2 - Required based on customer type
     if (customerType === 'corporate') {
@@ -147,13 +228,24 @@ export default function PaymentPage() {
       if (!formData.firstName.trim()) newErrors.firstName = t.required
       if (!formData.lastName.trim()) newErrors.lastName = t.required
     }
-
-    // Section 3 - Required
-    if (!formData.address.trim()) newErrors.address = t.required
-    if (!formData.serviceOrProduct.trim()) newErrors.serviceOrProduct = t.required
+    
+    // Section 3 - Required fields
+    if (!formData.phone.trim()) newErrors.phone = t.required
+    if (!formData.email.trim()) newErrors.email = t.required
+    
+    // Section 3 - Conditional required fields
+    if (customerType === 'corporate') {
+      if (!formData.firstName.trim()) newErrors.firstName = t.required
+      if (!formData.lastName.trim()) newErrors.lastName = t.required
+    } else {
+      if (!formData.contactFirstName.trim()) newErrors.contactFirstName = t.required
+      if (!formData.contactLastName.trim()) newErrors.contactLastName = t.required
+    }
+    
+    // Section 4 - Required
     if (!formData.totalAmount.trim()) newErrors.totalAmount = t.required
-
-    // Optional field validations
+    
+    // Email validation
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = t.invalidEmail
     }
@@ -177,9 +269,12 @@ export default function PaymentPage() {
       const invoiceNumber = formData.invoiceNumber
       
       // Prepare data for database insertion
+      const timestamp = Date.now()
+      const invoiceWithTimestamp = `${formData.invoiceNumber}-${timestamp}`
+      
       const paymentData = {
         customer_type: customerType,
-        invoice_number: invoiceNumber, // Store simple invoice in DB
+        invoice_number: invoiceWithTimestamp, // Store with timestamp in DB
         original_invoice_number: formData.invoiceNumber, // Keep original for reference
         fti_member_id: formData.ftiMemberId || null,
         tax_id: formData.taxId || null,
@@ -187,9 +282,11 @@ export default function PaymentPage() {
         company_name: customerType === 'corporate' ? formData.companyName : null,
         first_name: customerType === 'personal' ? formData.firstName : null,
         last_name: customerType === 'personal' ? formData.lastName : null,
+        contact_first_name: customerType === 'personal' ? formData.contactFirstName : null,
+        contact_last_name: customerType === 'personal' ? formData.contactLastName : null,
         phone: formData.phone || null,
         email: formData.email || null,
-        address: formData.address,
+        address: null,
         service_or_product: formData.serviceOrProduct,
         total_amount: parseFloat(formData.totalAmount),
         created_at: new Date().toISOString()
@@ -212,16 +309,24 @@ export default function PaymentPage() {
         throw new Error('Failed to save payment data')
       }
 
-      // Get 2C2P payment token using simple invoice number
+      // Get 2C2P payment token
       const tokenResponse = await fetch('/api/payment/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          invoiceNo: invoiceNumber, // Send simple invoice to 2C2P
+          invoiceNo: invoiceWithTimestamp, // Use timestamped invoice for 2C2P
           amount: parseFloat(formData.totalAmount),
-          description: formData.serviceOrProduct
+          description: formData.serviceOrProduct || 'Payment',
+          // User Defined fields mapping
+          userDefined1: `${formData.invoiceNumber}-${timestamp}`, // Invoice-Tax ID
+          userDefined2: customerType === 'corporate' 
+            ? formData.companyName 
+            : `${formData.firstName} ${formData.lastName}`, // Name
+          userDefined3: formData.phone || '', // Phone
+          userDefined4: formData.email || '', // Email
+          userDefined5: customerType === 'corporate' ? 'corporate' : 'personal' // Customer type
         }),
       })
 
@@ -306,7 +411,7 @@ export default function PaymentPage() {
                   name="customerType"
                   value="corporate"
                   checked={customerType === 'corporate'}
-                  onChange={(e) => setCustomerType(e.target.value as CustomerType)}
+                  onChange={(e) => handleCustomerTypeChange(e.target.value as CustomerType)}
                   className="mr-3 w-5 h-5 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-gray-800 font-medium">{t.corporate}</span>
@@ -317,7 +422,7 @@ export default function PaymentPage() {
                   name="customerType"
                   value="personal"
                   checked={customerType === 'personal'}
-                  onChange={(e) => setCustomerType(e.target.value as CustomerType)}
+                  onChange={(e) => handleCustomerTypeChange(e.target.value as CustomerType)}
                   className="mr-3 w-5 h-5 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-gray-800 font-medium">{t.personal}</span>
@@ -357,26 +462,54 @@ export default function PaymentPage() {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   {t.ftiMemberId}
                 </label>
-                <input
-                  type="text"
-                  value={formData.ftiMemberId}
-                  onChange={(e) => handleInputChange('ftiMemberId', e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  placeholder=""
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.ftiMemberId}
+                    onChange={(e) => handleInputChange('ftiMemberId', e.target.value)}
+                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder=""
+                  />
+                  <button
+                    type="button"
+                    onClick={() => searchFtiMember(formData.ftiMemberId, 'memberCode')}
+                    disabled={isSearchingMember || !formData.ftiMemberId.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSearchingMember ? '...' : 'ค้นหา'}
+                  </button>
+                </div>
+                {memberSearchError && (
+                  <p className="mt-2 text-sm text-orange-600">{memberSearchError}</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.taxId}
+                  {t.taxId} <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.taxId}
-                  onChange={(e) => handleInputChange('taxId', e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  placeholder=""
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.taxId}
+                    onChange={(e) => handleInputChange('taxId', e.target.value)}
+                    className={`flex-1 px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                      errors.taxId ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder=""
+                  />
+                  <button
+                    type="button"
+                    onClick={() => searchFtiMember(formData.taxId, 'taxId')}
+                    disabled={isSearchingMember || !formData.taxId.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSearchingMember ? '...' : 'ค้นหา'}
+                  </button>
+                </div>
+                {errors.taxId && (
+                  <p className="mt-2 text-sm text-red-600">{errors.taxId}</p>
+                )}
               </div>
 
               <div>
@@ -474,9 +607,88 @@ export default function PaymentPage() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* First Name and Last Name - Required for all customer types */}
+              {customerType === 'corporate' ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {t.firstName} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
+                      className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                        errors.firstName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder=""
+                    />
+                    {errors.firstName && (
+                      <p className="mt-2 text-sm text-red-600">{errors.firstName}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {t.lastName} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
+                      className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                        errors.lastName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder=""
+                    />
+                    {errors.lastName && (
+                      <p className="mt-2 text-sm text-red-600">{errors.lastName}</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {t.firstName} (ส่วนที่ 3) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.contactFirstName}
+                      onChange={(e) => handleInputChange('contactFirstName', e.target.value)}
+                      className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                        errors.contactFirstName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder=""
+                    />
+                    {errors.contactFirstName && (
+                      <p className="mt-2 text-sm text-red-600">{errors.contactFirstName}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {t.lastName} (ส่วนที่ 3) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.contactLastName}
+                      onChange={(e) => handleInputChange('contactLastName', e.target.value)}
+                      className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                        errors.contactLastName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder=""
+                    />
+                    {errors.contactLastName && (
+                      <p className="mt-2 text-sm text-red-600">{errors.contactLastName}</p>
+                    )}
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.phone}
+                  {t.phone} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -494,7 +706,7 @@ export default function PaymentPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.email}
+                  {t.email} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -512,25 +724,7 @@ export default function PaymentPage() {
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.address} <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  rows={3}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
-                    errors.address ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder=""
-                />
-                {errors.address && (
-                  <p className="mt-2 text-sm text-red-600">{errors.address}</p>
-                )}
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.serviceOrProduct} <span className="text-red-500">*</span>
+                  {t.serviceOrProduct}
                 </label>
                 <input
                   type="text"
@@ -563,6 +757,9 @@ export default function PaymentPage() {
                 {errors.totalAmount && (
                   <p className="mt-2 text-sm text-red-600">{errors.totalAmount}</p>
                 )}
+                <p className="mt-2 text-sm text-red-600">
+                  สภาอุตสาหกรรมแห่งประเทศไทย เข้าข่ายไม่ต้องเสียภาษีเงินได้นิติบุคคล จึงไม่ต้องหักภาษี ณ ที่จ่าย
+                </p>
               </div>
             </div>
           </div>
