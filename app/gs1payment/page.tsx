@@ -302,8 +302,8 @@ export default function GS1PaymentPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center space-x-2 sm:space-x-4">
               <Image
-                src="/FTI-MasterLogo_RGB-White.png"
-                alt="FTI Thailand"
+                src="/GS1_Thailand_122px_Tall_RGB_2014-12-17.png"
+                alt="GS1 Thailand"
                 width={80}
                 height={80}
                 className="h-12 w-auto sm:h-16 sm:w-auto"
