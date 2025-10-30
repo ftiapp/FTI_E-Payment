@@ -9,7 +9,7 @@ const mssqlConfig = {
   options: {
     encrypt: true, // For Azure SQL
     enableArithAbort: true,
-    trustServerCertificate: process.env.NODE_ENV === 'development'
+    trustServerCertificate: true // Allow self-signed certificates
   },
   connectionTimeout: 30000,
   requestTimeout: 30000,

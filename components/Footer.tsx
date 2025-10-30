@@ -31,37 +31,7 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Useful Links */}
-          <div>
-            <h4 className="text-lg font-semibold mb-4">ลิงก์ที่เป็นประโยชน์</h4>
-            <ul className="space-y-2">
-              <li>
-                <Link href="/about" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  เกี่ยวกับเรา
-                </Link>
-              </li>
-              <li>
-                <Link href="/services" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  บริการ
-                </Link>
-              </li>
-              <li>
-                <Link href="/news" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  ข่าวสาร
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  ติดต่อเรา
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacy" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  นโยบายความเป็นส่วนตัว
-                </Link>
-              </li>
-            </ul>
-          </div>
+          
 
           {/* Follow Us */}
           <div>
