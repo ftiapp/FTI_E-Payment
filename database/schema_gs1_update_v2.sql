@@ -11,7 +11,7 @@ ADD COLUMN `last_name` VARCHAR(100) NULL AFTER `first_name`;
 
 -- 2. Add contact_first_name and contact_last_name to GS1_personal_customers table
 ALTER TABLE `GS1_personal_customers` 
-ADD COLUMN `contact_first_name` VARCHAR(100) NULL AFTER `address`,
+ADD COLUMN `contact_first_name` VARCHAR(100) NULL AFTER `address`,a
 ADD COLUMN `contact_last_name` VARCHAR(100) NULL AFTER `contact_first_name`;
 
 -- 3. Make address nullable in both tables
