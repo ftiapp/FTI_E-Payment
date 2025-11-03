@@ -33,6 +33,12 @@ export default function Header() {
             <a href="https://www.fti.or.th/Articles/list" target="_blank" rel="noopener noreferrer" className="hover:text-blue-200 transition-colors">ข่าวสาร</a>
             <a href="https://www.fti.or.th/ContactUs/contactchannel" target="_blank" rel="noopener noreferrer" className="hover:text-blue-200 transition-colors">ติดต่อเรา</a>
             <Link 
+              href="/mailtracking" 
+              className="hover:text-blue-200 transition-colors"
+            >
+              ติดตามพัสดุ
+            </Link>
+            <Link 
               href="/payment" 
               className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition-colors"
             >
@@ -63,6 +69,12 @@ export default function Header() {
               <a href="https://www.fti.or.th/Serve/certification" target="_blank" rel="noopener noreferrer" className="hover:text-blue-200 transition-colors">บริการ</a>
               <a href="https://www.fti.or.th/Articles/list" target="_blank" rel="noopener noreferrer" className="hover:text-blue-200 transition-colors">ข่าวสาร</a>
               <a href="https://www.fti.or.th/ContactUs/contactchannel" target="_blank" rel="noopener noreferrer" className="hover:text-blue-200 transition-colors">ติดต่อเรา</a>
+              <Link 
+                href="/mailtracking" 
+                className="hover:text-blue-200 transition-colors"
+              >
+                ติดตามพัสดุ
+              </Link>
               <Link 
                 href="/payment" 
                 className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition-colors text-center"
