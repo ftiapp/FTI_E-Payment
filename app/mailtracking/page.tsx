@@ -18,6 +18,7 @@ export default function MailTracking() {
   const [results, setResults] = useState<TrackingResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
 
   const handleSearch = async () => {
     if (!invoiceNo.trim() || !taxId.trim()) {
@@ -28,6 +29,7 @@ export default function MailTracking() {
     setLoading(true)
     setError('')
     setResults([])
+    setHasSearched(true)
 
     try {
       const params = new URLSearchParams()
@@ -140,7 +142,7 @@ export default function MailTracking() {
             </div>
           )}
 
-          {results.length === 0 && !loading && !error && invoiceNo && taxId && (
+          {results.length === 0 && !loading && !error && hasSearched && (
             <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded-lg">
               <div className="flex items-center">
                 <svg className="w-5 h-5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
