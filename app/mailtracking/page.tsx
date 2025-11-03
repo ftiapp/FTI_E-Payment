@@ -66,6 +66,9 @@ export default function MailTracking() {
             ติดตามพัสดุ
           </h1>
           <p className="text-gray-600">ค้นหาสถานะการจัดส่งพัสดุของคุณ</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+            <p className="text-blue-800 text-sm font-medium">สามารถตรวจสอบได้หลังการชำระเงิน 5-7 วันทำการ หรือสามารถติดต่อฝ่ายการเงิน สภาอุตสาหกรรมแห่งประเทศไทย ได้ที่ 02-345-1044</p>
+          </div>
         </div>
 
         {/* Search Form */}
